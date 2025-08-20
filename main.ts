@@ -117,15 +117,16 @@ async function main() {
   }
   const json: DenoInfoJson = JSON.parse(new TextDecoder().decode(stdout));
 
-  console.log(`Found ${json.modules.length} modules`);
-  const localModules = json.modules.filter((m) => m.local);
-  console.log(`${localModules.length} local modules`);
+  const localModulesCount = json.modules.filter((m) => m.local).length;
+  console.log(`${json.modules.length} modules`);
+  console.log(`${localModulesCount} local modules`);
 
   const cycles = findCycles(json);
-  if (cycles.length === 0) {
+  const cyclesCount = cycles.length;
+  if (cyclesCount === 0) {
     console.log("No circular dependencies found.");
   } else {
-    console.log("Circular dependencies detected:");
+    console.log(`${cyclesCount} circular dependencies detected:`);
     for (const cycle of cycles) {
       const dimmedCycle = cycle.map((c) => `\x1b[2m${c}\x1b[22m`);
       console.log("\u{25a0} " + dimmedCycle.join(" \u{25b6} "));
