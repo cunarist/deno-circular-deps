@@ -100,8 +100,10 @@ function findCycles(info: DenoInfoJson): string[][] {
 
 async function main() {
   const [file] = Deno.args;
-  if (!file) {
-    console.error("Usage: deno run -A main.ts <entry_file>");
+  try {
+    await Deno.stat(file);
+  } catch {
+    console.error(`Error: File '${file}' does not exist or is not accessible`);
     Deno.exit(1);
   }
   const cmd = new Deno.Command("deno", {
