@@ -23,8 +23,8 @@ The process exits with code 0 on success, and 1 on failure. This means you can e
 ✅ **No circular dependencies:**
 
 ```
-📦 15 modules
-📁 8 local modules
+📦 2 modules
+📁 2 local modules
 ✅ No circular dependencies found
 ```
 
