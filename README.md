@@ -10,8 +10,6 @@ A circular dependency detection tool for Deno projects
 
 ## Usage
 
-### Terminal
-
 This tool is designed for terminal use.
 
 ```shell
@@ -32,7 +30,12 @@ The process exits with code 0 on success, and 1 on failure. This means you can e
 
 ❌ **Circular dependencies found:**
 
-TBW
+```
+📦 2 modules
+📁 2 local modules
+🚨 1 circular dependencies detected
+■ C:/Users/username/Repositories/deno-circular-deps/examples/mod-b.ts ▶ C:/Users/username/Repositories/deno-circular-deps/examples/mod-d.ts ▶ C:/Users/username/Repositories/deno-circular-deps/examples/mod-b.ts
+```
 
 ## How It Works
 
