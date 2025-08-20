@@ -1,6 +1,6 @@
 # Deno Circular Dependency Checker
 
-A circular dependency detection tool for Deno projects that integrates with your linting workflow.
+A circular dependency detection tool for Deno projects
 
 ## Features
 
