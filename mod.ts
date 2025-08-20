@@ -126,7 +126,7 @@ async function main() {
   if (cyclesCount === 0) {
     console.log("\u{2705} No circular dependencies found");
   } else {
-    console.log(`\u{fe0f} ${cyclesCount} circular dependencies detected`);
+    console.log(`\u{1f6a8} ${cyclesCount} circular dependencies detected`);
     for (const cycle of cycles) {
       const dimmedCycle = cycle.map((c) => `\x1b[2m${c}\x1b[22m`);
       console.log("\u{25a0} " + dimmedCycle.join(" \u{25b6} "));
