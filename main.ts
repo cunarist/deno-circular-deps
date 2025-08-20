@@ -124,9 +124,9 @@ async function main() {
   const cycles = findCycles(json);
   const cyclesCount = cycles.length;
   if (cyclesCount === 0) {
-    console.log("No circular dependencies found.");
+    console.log("No circular dependencies found");
   } else {
-    console.log(`${cyclesCount} circular dependencies detected:`);
+    console.log(`${cyclesCount} circular dependencies detected`);
     for (const cycle of cycles) {
       const dimmedCycle = cycle.map((c) => `\x1b[2m${c}\x1b[22m`);
       console.log("\u{25a0} " + dimmedCycle.join(" \u{25b6} "));
