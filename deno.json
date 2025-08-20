@@ -1,6 +1,32 @@
 {
-  "tasks": {
-    "dev": "deno run --watch main.ts"
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.ns", "es2022", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "jsxImportSourceTypes": "@types/react"
+  },
+  "lint": {
+    "plugins": [
+      "jsr:@hugoalh/deno-lint-rules@0.8.3/recommended",
+      "jsr:@ayk/lint-import-order@0.1.0"
+    ],
+    "rules": {
+      "tags": ["recommended", "react", "fresh", "jsr", "jsx"],
+      "exclude": ["no-slow-types"],
+      "include": [
+        "eqeqeq",
+        "camelcase",
+        "guard-for-in",
+        "no-const-assign",
+        "no-eval",
+        "no-external-import",
+        "no-non-null-asserted-optional-chain",
+        "no-non-null-assertion",
+        "no-throw-literal",
+        "prefer-ascii"
+      ]
+    }
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1"
