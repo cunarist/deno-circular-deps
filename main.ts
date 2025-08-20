@@ -127,7 +127,8 @@ async function main() {
   } else {
     console.log("Circular dependencies detected:");
     for (const cycle of cycles) {
-      console.log("\u{25a0} " + cycle.join(" \u{25b6} "));
+      const dimmedCycle = cycle.map((c) => `\x1b[2m${c}\x1b[22m`);
+      console.log("\u{25a0} " + dimmedCycle.join(" \u{25b6} "));
     }
     Deno.exit(1);
   }
