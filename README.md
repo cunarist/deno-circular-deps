@@ -13,7 +13,7 @@ A circular dependency detection tool for Deno projects
 This tool is designed for terminal use.
 
 ```shell
-deno run jsr:deno-circular-deps somefile.ts
+deno run -A jsr:@cunarist/deno-circular-deps somefile.ts
 ```
 
 The process exits with code 0 on success, and 1 on failure. This means you can easily use this in CI such as GitHub Actions.
