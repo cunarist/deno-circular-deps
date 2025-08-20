@@ -1,4 +1,7 @@
 {
+  "name": "@cunarist/deno-circular-deps",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
   "compilerOptions": {
     "strict": true,
     "lib": ["deno.ns", "es2022", "dom", "dom.iterable"],
