@@ -198,19 +198,19 @@ import { thing } from "./sub/deep/mod.ts"; // error, two levels down
 Together with `no-parent-import` this leaves exactly two ways to reach another
 module: a sibling file, or a `#` entry.
 
-### `no-wildcard-export`
+### `no-wildcard-import`
 
-Requires every re-export to name its public bindings.
+Requires every import to name its dependencies explicitly.
 
 ```ts
-export * from "./internal.ts"; // error
-export { parse, stringify } from "./internal.ts"; // correct
-export * as internal from "./internal.ts"; // correct, one explicit namespace
+import * as internal from "./internal.ts"; // error
+import { parse, stringify } from "./internal.ts"; // correct
+import internal from "./internal.ts"; // correct
 ```
 
-An explicit list makes the public surface visible in the entry point and stops
-new internal exports from becoming public accidentally. Namespace exports are
-allowed because they expose the dependency under one deliberate name.
+An explicit list keeps each file's dependency surface narrow and visible at the
+import site. Side-effect imports remain allowed because they do not introduce
+bindings.
 
 ### `enforce-mod-file`
 

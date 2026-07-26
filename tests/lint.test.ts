@@ -1,10 +1,11 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 
 import { parseConfigText } from "#imports";
-import plugin, * as rules from "#lint";
+import plugin from "#lint";
 import { normalizePath, parentDir } from "#paths";
 
 const FIXTURE = parentDir(normalizePath(import.meta.url)) + "/fixture";
+const rules = await import("#lint");
 
 /**
  * Runs the plugin against a source string as if it lived at the given path
@@ -329,20 +330,22 @@ Deno.test("no-self-import leaves other modules alone", () => {
   assertEquals(found.length, 0);
 });
 
-Deno.test("no-wildcard-export requires explicit public bindings", () => {
-  const source = `export * from "./internal.ts";\n` +
-    `export type * from "./types.ts";\n`;
-  const found = lint("src/components/mod.ts", source, "no-wildcard-export");
+Deno.test("no-wildcard-import requires explicit dependencies", () => {
+  const source = `import * as internal from "./internal.ts";\n` +
+    `import type * as types from "./types.ts";\n`;
+  const found = lint("src/components/mod.ts", source, "no-wildcard-import");
 
   assertEquals(found.length, 2);
-  assertStringIncludes(found[0].message, "Wildcard exports");
-  assertStringIncludes(found[0].hint ?? "", "export { ... }");
+  assertStringIncludes(found[0].message, "Wildcard imports");
+  assertStringIncludes(found[0].hint ?? "", "import { ... }");
 });
 
-Deno.test("no-wildcard-export allows named and namespace exports", () => {
-  const source = `export { internal } from "./internal.ts";\n` +
-    `export * as internal from "./internal.ts";\n`;
-  const found = lint("src/components/mod.ts", source, "no-wildcard-export");
+Deno.test("no-wildcard-import allows explicit and side-effect imports", () => {
+  const source = `import value from "./value.ts";\n` +
+    `import { internal } from "./internal.ts";\n` +
+    `import type { Types } from "./types.ts";\n` +
+    `import "./setup.ts";\n`;
+  const found = lint("src/components/mod.ts", source, "no-wildcard-import");
 
   assertEquals(found.length, 0);
 });

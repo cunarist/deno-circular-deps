@@ -456,23 +456,25 @@ export const noRelativeBypass: Deno.lint.Rule = {
 };
 
 /**
- * The `no-wildcard-export` rule.
+ * The `no-wildcard-import` rule.
  *
- * Requires re-exports to name their public bindings explicitly. A namespace
- * export already gives the dependency one name.
+ * Requires imports to name the bindings they depend on explicitly.
  */
-export const noWildcardExport: Deno.lint.Rule = {
+export const noWildcardImport: Deno.lint.Rule = {
   create(ctx) {
     return {
-      ExportAllDeclaration(node) {
-        if (node.exported !== null) {
+      ImportDeclaration(node) {
+        const namespace = node.specifiers.find((specifier) =>
+          specifier.type === "ImportNamespaceSpecifier"
+        );
+        if (namespace === undefined) {
           return;
         }
         ctx.report({
-          node,
-          message: "Wildcard exports are not allowed.",
+          node: namespace,
+          message: "Wildcard imports are not allowed.",
           hint:
-            'Name every public binding explicitly with "export { ... } from ...".',
+            'Name every dependency explicitly with "import { ... } from ...".',
         });
       },
     };
@@ -857,7 +859,7 @@ const plugin: Deno.lint.Plugin = {
     "prefer-alias-import": preferAliasImport,
     "no-barrel-bypass": noBarrelBypass,
     "no-relative-bypass": noRelativeBypass,
-    "no-wildcard-export": noWildcardExport,
+    "no-wildcard-import": noWildcardImport,
     "enforce-mod-file": enforceModFile,
     "no-duplicate-import-source": noDuplicateImportSource,
     "enforce-import-order": enforceImportOrder,
