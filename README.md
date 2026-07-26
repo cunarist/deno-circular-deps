@@ -4,10 +4,10 @@ Keep a Deno module graph free of cycles and clearly layered.
 
 This package ships two complementary halves:
 
-|                 | Runs as     | Catches                                               |
-| --------------- | ----------- | ----------------------------------------------------- |
-| **CLI**         | `deno run`  | Circular dependencies anywhere in the module graph    |
-| **Lint plugin** | `deno lint` | Parent imports, barrel bypasses, and layer violations |
+|                 | Runs as     | Catches                                             |
+| --------------- | ----------- | --------------------------------------------------- |
+| **CLI**         | `deno run`  | Cycles and invalid or unused internal aliases       |
+| **Lint plugin** | `deno lint` | Risky import patterns and unclear module boundaries |
 
 They are split this way because a Deno lint plugin only ever sees one file's
 syntax tree. It cannot follow imports, so it cannot detect a cycle. The CLI
@@ -33,6 +33,7 @@ into CI or a pre-commit hook.
 📦 2 modules
 📁 2 local modules
 ✅ No circular dependencies found
+✅ Every "#" internal import alias has a unique target
 ✅ Every "#" internal import alias is used
 ```
 
@@ -43,13 +44,16 @@ into CI or a pre-commit hook.
 📁 2 local modules
 🚨 1 circular dependencies detected
 ■ ./examples/mod-b.ts ▶ ./examples/mod-d.ts ▶ ./examples/mod-b.ts
+🚨 1 duplicate "#" internal import alias target in deno.json
+■ #utils, #helpers ▶ ./src/utils/mod.ts
 🚨 1 unused "#" internal import alias in deno.json
 ■ #legacy
 ```
 
 Under the hood it builds the complete module graph with `@deno/loader`, walks it
-depth first to find cycles, and reports each one as a path. Only local modules
-are traversed, so remote and JSR dependencies are ignored.
+depth first to find cycles, rejects multiple `#` aliases pointing at the same
+target, and reports aliases the graph never uses. Only local modules are
+traversed, so remote and JSR dependencies are ignored.
 
 ## Lint plugin
 
@@ -102,6 +106,21 @@ The rules read the `#` entries of the `imports` map in the nearest `deno.json`,
 which declare what the modules are. A file belongs to the module whose directory
 contains it, so an entry pointing at a barrel owns everything beside it, while
 one pointing at a plain file owns only that file.
+
+### `no-self-import`
+
+Bans a file from importing itself through a relative path, local URL, or `#`
+alias. Static imports, re-exports, dynamic imports, and type-level imports are
+all covered when their source is a fixed string.
+
+```ts
+// in ./src/utils/helper.ts
+import { helper } from "./helper.ts"; // error
+import { format } from "./format.ts"; // correct
+```
+
+A self-import is already a one-file circular dependency, so the lint rule can
+report it immediately without waiting for the CLI to build the whole graph.
 
 ### `no-parent-import`
 
@@ -178,6 +197,20 @@ import { thing } from "./sub/deep/mod.ts"; // error, two levels down
 
 Together with `no-parent-import` this leaves exactly two ways to reach another
 module: a sibling file, or a `#` entry.
+
+### `no-wildcard-export`
+
+Requires every re-export to name its public bindings.
+
+```ts
+export * from "./internal.ts"; // error
+export { parse, stringify } from "./internal.ts"; // correct
+export * as internal from "./internal.ts"; // correct, one explicit namespace
+```
+
+An explicit list makes the public surface visible in the entry point and stops
+new internal exports from becoming public accidentally. Namespace exports are
+allowed because they expose the dependency under one deliberate name.
 
 ### `enforce-mod-file`
 

@@ -1,12 +1,12 @@
 /**
  * A CLI that finds circular dependencies in a Deno module graph.
  *
- * It builds the module graph for the entry points you pass and runs two
+ * It builds the module graph for the entry points you pass and runs three
  * checks. It walks the graph depth first and prints every cycle it finds as a
- * path, then compares the `#` entries declared in `deno.json` against the
- * specifiers the graph actually imports and prints the ones nothing reaches.
- * Only local modules are traversed, so remote and JSR dependencies are
- * ignored.
+ * path, rejects `#` aliases that share a target, then compares the aliases
+ * declared in `deno.json` against the specifiers the graph actually imports
+ * and prints the ones nothing reaches. Only local modules are traversed, so
+ * remote and JSR dependencies are ignored.
  *
  * Pass every root the project has. An alias imported only by files outside the
  * graph is reported as unused, so leaving the tests out produces noise.
@@ -204,6 +204,50 @@ function findUnusedAliases(fromFile: string, used: Set<string>): string[] {
   return unused;
 }
 
+interface DuplicateAliasTarget {
+  /** Target path relative to the config directory. */
+  target: string;
+  /** Alias specifiers that all point at the target. */
+  specifiers: string[];
+}
+
+/**
+ * Groups exact and trailing-slash `#` aliases that resolve to the same target.
+ * The two kinds cannot collide because prefix targets end in a slash.
+ */
+function findDuplicateAliasTargets(
+  fromFile: string,
+): DuplicateAliasTarget[] {
+  const config = findImportsConfig(fromFile);
+  if (config === null) {
+    return [];
+  }
+
+  const byTarget = new Map<string, string[]>();
+  for (const entry of config.entries) {
+    const specifiers = byTarget.get(entry.target) ?? [];
+    specifiers.push(entry.specifier);
+    byTarget.set(entry.target, specifiers);
+  }
+  for (const prefix of config.prefixes) {
+    const specifiers = byTarget.get(prefix.target) ?? [];
+    specifiers.push(prefix.specifier);
+    byTarget.set(prefix.target, specifiers);
+  }
+
+  const duplicates: DuplicateAliasTarget[] = [];
+  for (const [target, specifiers] of byTarget) {
+    if (specifiers.length < 2) {
+      continue;
+    }
+    duplicates.push({
+      target: toRelativePath(target, config.configDir),
+      specifiers,
+    });
+  }
+  return duplicates;
+}
+
 async function main() {
   const files = Deno.args;
   if (files.length === 0) {
@@ -249,6 +293,25 @@ async function main() {
   // The config is found by walking up from a file, so the entry point has to
   // be absolute. A bare "src/mod.ts" would walk up from "src" and stop.
   const entryPath = resolveFrom(normalizePath(Deno.cwd()), files[0]);
+
+  const duplicateTargets = findDuplicateAliasTargets(entryPath);
+  if (duplicateTargets.length === 0) {
+    console.log('\u{2705} Every "#" internal import alias has a unique target');
+  } else {
+    const plural = duplicateTargets.length === 1 ? "target" : "targets";
+    console.log(
+      `\u{1f6a8} ${duplicateTargets.length} duplicate "#" internal import alias ${plural} in deno.json`,
+    );
+    for (const duplicate of duplicateTargets) {
+      console.log(
+        `\u{25a0} ${
+          duplicate.specifiers.join(", ")
+        } \u{25b6} \x1b[2m${duplicate.target}\x1b[22m`,
+      );
+    }
+    failed = true;
+  }
+
   const unused = findUnusedAliases(entryPath, usedAliases(json));
   if (unused.length === 0) {
     console.log('\u{2705} Every "#" internal import alias is used');

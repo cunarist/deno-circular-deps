@@ -291,6 +291,62 @@ Deno.test("enforce-mod-file leaves mod files and packages alone", () => {
   assertEquals(found.length, 0);
 });
 
+Deno.test("no-self-import covers every statically known dependency form", () => {
+  const source = `import { a } from "./internal.ts";\n` +
+    `export { b } from "./internal.ts";\n` +
+    `export * from "./internal.ts";\n` +
+    `const mod = await import("./internal.ts");\n` +
+    `export type T = import("./internal.ts").T;\n`;
+  const found = lint("src/components/internal.ts", source, "no-self-import");
+
+  assertEquals(found.length, 5);
+  assertStringIncludes(found[0].message, "imports the current file itself");
+  assertStringIncludes(found[0].hint ?? "", "circular dependency");
+});
+
+Deno.test("no-self-import resolves exact and deep aliases", () => {
+  const exact = lint(
+    "src/components/mod.ts",
+    `import { components } from "#components";\n`,
+    "no-self-import",
+  );
+  const deep = lint(
+    "src/components/internal.ts",
+    `import { internal } from "#components/internal.ts?raw";\n`,
+    "no-self-import",
+  );
+
+  assertEquals(exact.length, 1);
+  assertEquals(deep.length, 1);
+});
+
+Deno.test("no-self-import leaves other modules alone", () => {
+  const source = `import { helper } from "./helper.ts";\n` +
+    `import { components } from "#components";\n` +
+    `import { html } from "npm:lit";\n`;
+  const found = lint("src/components/internal.ts", source, "no-self-import");
+
+  assertEquals(found.length, 0);
+});
+
+Deno.test("no-wildcard-export requires explicit public bindings", () => {
+  const source = `export * from "./internal.ts";\n` +
+    `export type * from "./types.ts";\n`;
+  const found = lint("src/components/mod.ts", source, "no-wildcard-export");
+
+  assertEquals(found.length, 2);
+  assertStringIncludes(found[0].message, "Wildcard exports");
+  assertStringIncludes(found[0].hint ?? "", "export { ... }");
+});
+
+Deno.test("no-wildcard-export allows named and namespace exports", () => {
+  const source = `export { internal } from "./internal.ts";\n` +
+    `export * as internal from "./internal.ts";\n`;
+  const found = lint("src/components/mod.ts", source, "no-wildcard-export");
+
+  assertEquals(found.length, 0);
+});
+
 Deno.test("no-duplicate-import-source reports every repeated source", () => {
   const source = `import { a } from "#utils";\n` +
     `import type { Utils } from "#utils";\n` +
@@ -501,6 +557,53 @@ Deno.test('the CLI reports unused "#" imports', async () => {
   assertStringIncludes(output, `1 unused "#" internal import alias`);
   assertStringIncludes(output, "#unused");
   assertEquals(output.includes("#used\u{1b}"), false);
+
+  Deno.removeSync(dir, { recursive: true });
+});
+
+Deno.test('the CLI reports "#" aliases that share a target', async () => {
+  const dir = normalizePath(Deno.makeTempDirSync());
+  Deno.writeTextFileSync(
+    `${dir}/deno.json`,
+    `{ "imports": {
+      "#first": "./shared.ts",
+      "#second": "./shared.ts",
+      "#one/": "./lib/",
+      "#two/": "./lib/"
+    } }\n`,
+  );
+  Deno.writeTextFileSync(`${dir}/shared.ts`, `export const value = 1;\n`);
+  Deno.mkdirSync(`${dir}/lib`);
+  Deno.writeTextFileSync(`${dir}/lib/value.ts`, `export const value = 2;\n`);
+  Deno.writeTextFileSync(
+    `${dir}/main.ts`,
+    `import { value as first } from "#first";\n` +
+      `import { value as one } from "#one/value.ts";\n` +
+      `import { value as second } from "#second";\n` +
+      `import { value as two } from "#two/value.ts";\n\n` +
+      `export const values = [first, one, second, two];\n`,
+  );
+
+  const cli = parentDir(parentDir(normalizePath(import.meta.url))) +
+    "/src/mod.ts";
+  const { code, stdout } = await new Deno.Command(Deno.execPath(), {
+    args: ["run", "-A", cli, "main.ts"],
+    cwd: dir,
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  const output = new TextDecoder().decode(stdout);
+
+  assertEquals(code, 1);
+  assertStringIncludes(output, `2 duplicate "#" internal import alias targets`);
+  assertStringIncludes(output, "#first, #second");
+  assertStringIncludes(output, "#one/, #two/");
+  assertStringIncludes(output, "./shared.ts");
+  assertStringIncludes(output, "./lib/");
+  assertStringIncludes(
+    output,
+    `Every "#" internal import alias is used`,
+  );
 
   Deno.removeSync(dir, { recursive: true });
 });

@@ -22,6 +22,10 @@
     ],
     "rules": {
       "tags": ["recommended", "jsr"],
+      "exclude": [
+        "hugoalh/no-duplicate-imports",
+        "hugoalh/no-import-self"
+      ],
       "include": [
         "eqeqeq",
         "camelcase",

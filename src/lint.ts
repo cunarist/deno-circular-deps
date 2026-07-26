@@ -129,6 +129,72 @@ function quoteLike(
 }
 
 /**
+ * Resolves a local module specifier far enough to tell whether it names the
+ * importing file itself. Package specifiers have no local target.
+ */
+function resolveLocalSpecifier(
+  ctx: Deno.lint.RuleContext,
+  specifier: string,
+): string | null {
+  const filename = normalizePath(ctx.filename);
+
+  if (specifier.startsWith(".")) {
+    const path = specifier.replace(/[?#].*$/, "");
+    return resolveFrom(parentDir(filename), path);
+  }
+  if (specifier.startsWith("file:")) {
+    return normalizePath(specifier.replace(/[?#].*$/, ""));
+  }
+  if (specifier.startsWith("/")) {
+    const path = normalizePath(specifier.replace(/[?#].*$/, ""));
+    return /^\/[a-zA-Z]:/.test(path) ? path.slice(1) : path;
+  }
+  if (!specifier.startsWith("#")) {
+    return null;
+  }
+
+  const config = findImportsConfig(filename);
+  if (config === null) {
+    return null;
+  }
+  const exact = config.bySpecifier.get(specifier);
+  if (exact !== undefined) {
+    return exact.target;
+  }
+  const prefix = findPrefixEntry(config, specifier);
+  if (prefix === null) {
+    return null;
+  }
+  return resolveFrom(
+    prefix.target.replace(/\/$/, ""),
+    specifier.slice(prefix.specifier.length).replace(/[?#].*$/, ""),
+  );
+}
+
+/**
+ * The `no-self-import` rule.
+ *
+ * Bans any statically knowable specifier that resolves to the importing file.
+ */
+export const noSelfImport: Deno.lint.Rule = {
+  create(ctx) {
+    return visitSpecifiers((node, specifier) => {
+      const target = resolveLocalSpecifier(ctx, specifier);
+      if (target !== normalizePath(ctx.filename)) {
+        return;
+      }
+
+      ctx.report({
+        node,
+        message: `"${specifier}" imports the current file itself.`,
+        hint:
+          "A self-import is an immediate circular dependency. Read the local declaration directly instead.",
+      });
+    });
+  },
+};
+
+/**
  * Resolves the module a `#` specifier belongs to, whether it is an exact
  * entry such as `#utils` or a deep one such as `#utils/internal.ts`.
  */
@@ -386,6 +452,30 @@ export const noRelativeBypass: Deno.lint.Rule = {
           }/mod.ts" and re-export whatever this file needs from there.`,
       });
     });
+  },
+};
+
+/**
+ * The `no-wildcard-export` rule.
+ *
+ * Requires re-exports to name their public bindings explicitly. A namespace
+ * export already gives the dependency one name.
+ */
+export const noWildcardExport: Deno.lint.Rule = {
+  create(ctx) {
+    return {
+      ExportAllDeclaration(node) {
+        if (node.exported !== null) {
+          return;
+        }
+        ctx.report({
+          node,
+          message: "Wildcard exports are not allowed.",
+          hint:
+            'Name every public binding explicitly with "export { ... } from ...".',
+        });
+      },
+    };
   },
 };
 
@@ -733,11 +823,13 @@ function fixImportBlock(
 const plugin: Deno.lint.Plugin = {
   name: "import-check",
   rules: {
+    "no-self-import": noSelfImport,
     "no-parent-import": noParentImport,
     "no-absolute-import": noAbsoluteImport,
     "prefer-alias-import": preferAliasImport,
     "no-barrel-bypass": noBarrelBypass,
     "no-relative-bypass": noRelativeBypass,
+    "no-wildcard-export": noWildcardExport,
     "enforce-mod-file": enforceModFile,
     "no-duplicate-import-source": noDuplicateImportSource,
     "enforce-import-order": enforceImportOrder,
