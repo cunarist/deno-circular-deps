@@ -47,9 +47,9 @@ into CI or a pre-commit hook.
 ■ #legacy
 ```
 
-Under the hood it reads `deno info --json` for the complete module graph, walks
-it depth first to find cycles, and reports each one as a path. Only local
-modules are traversed, so remote and JSR dependencies are ignored.
+Under the hood it builds the complete module graph with `@deno/loader`, walks it
+depth first to find cycles, and reports each one as a path. Only local modules
+are traversed, so remote and JSR dependencies are ignored.
 
 ## Lint plugin
 

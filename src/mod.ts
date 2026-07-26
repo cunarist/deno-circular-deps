@@ -1,12 +1,12 @@
 /**
  * A CLI that finds circular dependencies in a Deno module graph.
  *
- * It reads `deno info --json` for the entry points you pass, merges them into
- * one graph, and runs two checks. It walks the graph depth first and prints
- * every cycle it finds as a path, then compares the `#` entries declared in
- * `deno.json` against the specifiers the graph actually imports and prints the
- * ones nothing reaches. Only local modules are traversed, so remote and JSR
- * dependencies are ignored.
+ * It builds the module graph for the entry points you pass and runs two
+ * checks. It walks the graph depth first and prints every cycle it finds as a
+ * path, then compares the `#` entries declared in `deno.json` against the
+ * specifiers the graph actually imports and prints the ones nothing reaches.
+ * Only local modules are traversed, so remote and JSR dependencies are
+ * ignored.
  *
  * Pass every root the project has. An alias imported only by files outside the
  * graph is reported as unused, so leaving the tests out produces noise.
@@ -17,46 +17,60 @@
  * @module
  */
 
-import { findImportsConfig } from "./imports.ts";
-import { normalizePath, resolveFrom, toRelativePath } from "./paths.ts";
+import { Workspace } from "@deno/loader";
 
+import { findImportsConfig } from "./imports.ts";
+import {
+  normalizePath,
+  resolveFrom,
+  toFileUrl,
+  toRelativePath,
+} from "./paths.ts";
+
+/** One import in a module, as {@linkcode Workspace} reports it. */
 interface Dependency {
+  /** The specifier exactly as written in source, such as `#utils`. */
   specifier: string;
+  /** Where the specifier resolved to, absent when resolution failed. */
   code?: {
     specifier: string;
   };
+  /** Where an `@deno-types` or `@ts-types` annotation resolved to. */
   type?: {
     specifier: string;
   };
 }
 
+/** One node of the module graph. */
 interface Module {
   kind?: string;
-  local?: string;
   specifier: string;
   dependencies?: Dependency[];
 }
 
-interface DenoInfoJson {
+/** The subset of the loader's graph these checks read. */
+interface ModuleGraph {
   modules: Module[];
+}
+
+/** Whether a module specifier points at a file on disk. */
+function isLocal(specifier: string): boolean {
+  return specifier.startsWith("file:");
 }
 
 /**
  * The main function that finds circular dependencies
- * in the given Deno info JSON.
+ * in the given module graph.
  */
-function findCycles(info: DenoInfoJson): string[][] {
+function findCycles(info: ModuleGraph): string[][] {
   const cycles: string[][] = [];
   const visited = new Set<string>();
   const recursionStack = new Set<string>();
 
   const moduleMap = new Map<string, Module>();
   for (const module of info.modules) {
-    if (module.local) {
-      const normalizedPath = normalizePath(module.local);
-      moduleMap.set(normalizedPath, module);
-      const normalizedSpecifier = normalizePath(module.specifier);
-      moduleMap.set(normalizedSpecifier, module);
+    if (isLocal(module.specifier)) {
+      moduleMap.set(normalizePath(module.specifier), module);
     }
   }
 
@@ -103,8 +117,8 @@ function findCycles(info: DenoInfoJson): string[][] {
   }
 
   for (const module of info.modules) {
-    if (module.local) {
-      const normalizedPath = normalizePath(module.local);
+    if (isLocal(module.specifier)) {
+      const normalizedPath = normalizePath(module.specifier);
       if (!visited.has(normalizedPath)) {
         dfs(module.specifier, [normalizedPath]);
       }
@@ -114,27 +128,43 @@ function findCycles(info: DenoInfoJson): string[][] {
   return cycles;
 }
 
-/** Runs `deno info --json` for one entry point. */
-async function readGraph(file: string): Promise<DenoInfoJson> {
-  const cmd = new Deno.Command("deno", {
-    args: ["info", file, "--json"],
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const { code, stdout, stderr } = await cmd.output();
-  if (code !== 0) {
-    console.error(new TextDecoder().decode(stderr));
+/**
+ * Builds one graph covering every entry point.
+ *
+ * `@deno/loader` is Deno's own resolver compiled to Wasm, so the graph comes
+ * from the same code `deno info` runs without spawning it as a subprocess.
+ * That means no dependency on a `deno` binary being on `PATH`, and one graph
+ * build for all entry points instead of one process each.
+ *
+ * The graph API is marked unstable, so its shape may change between patch
+ * releases of the loader. The version range here is pinned tightly for that
+ * reason.
+ */
+async function readGraph(files: string[]): Promise<ModuleGraph> {
+  // Config discovery walks up from the working directory, matching what
+  // `deno info` does when run in a project.
+  using workspace = new Workspace();
+  using loader = await workspace.createLoader();
+  const diagnostics = await loader.addEntrypoints(
+    files.map((file) =>
+      toFileUrl(resolveFrom(normalizePath(Deno.cwd()), file))
+    ),
+  );
+  if (diagnostics.length > 0) {
+    for (const diagnostic of diagnostics) {
+      console.error(diagnostic.message);
+    }
     Deno.exit(1);
   }
-  return JSON.parse(new TextDecoder().decode(stdout));
+  return loader.getGraphUnstable() as ModuleGraph;
 }
 
 /**
- * Collects every `#` specifier as it was written in source. `deno info`
+ * Collects every `#` specifier as it was written in source. The graph
  * reports the raw text alongside the resolved path, so an alias can be
  * matched against the `imports` map without re-parsing any file.
  */
-function usedAliases(info: DenoInfoJson): Set<string> {
+function usedAliases(info: ModuleGraph): Set<string> {
   const used = new Set<string>();
   for (const module of info.modules) {
     for (const dependency of module.dependencies ?? []) {
@@ -193,15 +223,10 @@ async function main() {
 
   // Every entry point contributes to one graph, so a module reachable from
   // the tests but not from the app still counts as reached.
-  const modules = new Map<string, Module>();
-  for (const file of files) {
-    for (const module of (await readGraph(file)).modules) {
-      modules.set(module.specifier, module);
-    }
-  }
-  const json: DenoInfoJson = { modules: [...modules.values()] };
+  const json = await readGraph(files);
 
-  const localModulesCount = json.modules.filter((m) => m.local).length;
+  const localModulesCount = json.modules.filter((m) => isLocal(m.specifier))
+    .length;
   console.log(`\u{1f4e6} ${json.modules.length} modules`);
   console.log(`\u{1f4c1} ${localModulesCount} local modules`);
 

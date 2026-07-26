@@ -18,6 +18,15 @@ export function normalizePath(path: string): string {
 }
 
 /**
+ * Converts an absolute path to a "file:///" URL, which is the form
+ * module specifiers take. Tolerant of either separator.
+ */
+export function toFileUrl(absolutePath: string): string {
+  const normalized = normalizePath(absolutePath);
+  return "file:///" + normalized.replace(/^\//, "");
+}
+
+/**
  * Converts an absolute path to a path
  * relative to the current working directory.
  * Does nothing if the path is not under the current working directory.

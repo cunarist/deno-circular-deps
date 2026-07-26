@@ -4,7 +4,7 @@
 clearly layered. It ships two surfaces from one package:
 
 - **CLI** (`src/mod.ts`, the `.` export) resolves the whole module graph through
-  `deno info --json` and reports cycles.
+  `@deno/loader` and reports cycles.
 - **Lint plugin** (`src/lint.ts`, the `./lint` export) bans the import patterns
   that create cycles.
 
@@ -66,6 +66,8 @@ now, so renaming one is a breaking change.
 ## The plugin must have zero dependencies
 
 `src/lint.ts` and everything it imports must not import any external package.
+The rule stops there: `src/mod.ts` is a CLI, never loaded as a plugin, so its
+`@deno/loader` import is fine as long as nothing under `src/lint.ts` reaches it.
 
 A lint plugin's own imports resolve against the **consuming** project's import
 map, not this package's. Adding a dependency here works when the plugin is
@@ -110,7 +112,7 @@ manual edits to `deno.json` followed by `deno publish`.
 
 A lint rule sees one file at a time, so it can never conclude that nothing
 imports a given `#` entry. The CLI does it instead, by comparing the entries in
-`deno.json` against the raw specifiers `deno info --json` reports for the whole
+`deno.json` against the raw specifiers the module graph reports for the whole
 graph.
 
 This is why the CLI takes many entry points rather than one. Pass every root a
