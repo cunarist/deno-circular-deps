@@ -291,6 +291,27 @@ Deno.test("enforce-mod-file leaves mod files and packages alone", () => {
   assertEquals(found.length, 0);
 });
 
+Deno.test("no-duplicate-import-source reports every repeated source", () => {
+  const source = `import { a } from "#utils";\n` +
+    `import type { Utils } from "#utils";\n` +
+    `import "#utils";\n`;
+  const found = lint("src/mod.ts", source, "no-duplicate-import-source");
+
+  assertEquals(found.length, 2);
+  assertStringIncludes(found[0].message, `"#utils" is duplicated`);
+  assertStringIncludes(found[0].hint ?? "", "Combine imports");
+});
+
+Deno.test("no-duplicate-import-source compares exact static sources", () => {
+  const source = `import { a } from "#utils";\n` +
+    `import { b } from "#components";\n` +
+    `export { c } from "#utils";\n` +
+    `const mod = await import("#utils");\n`;
+  const found = lint("src/mod.ts", source, "no-duplicate-import-source");
+
+  assertEquals(found.length, 0);
+});
+
 Deno.test("enforce-import-order requires blank lines between groups", () => {
   const source = `import { a } from "npm:zod";\n` +
     `import { b } from "#components";\n`;

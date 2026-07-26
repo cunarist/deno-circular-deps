@@ -504,6 +504,34 @@ function memberName(specifier: Deno.lint.ImportSpecifier): string {
 }
 
 /**
+ * The `no-duplicate-import-source` rule.
+ *
+ * Bans separate static import declarations with the same module specifier.
+ * Re-exports and dynamic imports are different operations and are left alone.
+ */
+export const noDuplicateImportSource: Deno.lint.Rule = {
+  create(ctx) {
+    const seen = new Set<string>();
+
+    return {
+      ImportDeclaration(node) {
+        const specifier = node.source.value as string;
+        if (!seen.has(specifier)) {
+          seen.add(specifier);
+          return;
+        }
+
+        ctx.report({
+          node: node.source,
+          message: `Import source "${specifier}" is duplicated.`,
+          hint: "Combine imports from the same source into one declaration.",
+        });
+      },
+    };
+  },
+};
+
+/**
  * The `enforce-import-order` rule.
  *
  * Groups imports as packages, then `#` aliases, then relative paths, separated by
@@ -711,6 +739,7 @@ const plugin: Deno.lint.Plugin = {
     "no-barrel-bypass": noBarrelBypass,
     "no-relative-bypass": noRelativeBypass,
     "enforce-mod-file": enforceModFile,
+    "no-duplicate-import-source": noDuplicateImportSource,
     "enforce-import-order": enforceImportOrder,
     "enforce-layer-order": enforceLayerOrder,
   },

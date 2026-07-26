@@ -196,6 +196,19 @@ Turning this rule off still leaves `index.ts` recognized as an entry point
 everywhere else, so a project on the Node convention loses nothing but this
 check.
 
+### `no-duplicate-import-source`
+
+Bans splitting imports from the same source across separate declarations.
+
+```ts
+import { parse } from "#utils";
+import type { Options } from "#utils"; // error, combine with the first import
+```
+
+The comparison uses the source exactly as written after parsing the string, so
+different specifiers are not assumed to resolve to the same module. Re-exports
+and dynamic imports are separate operations and are left alone.
+
 ### `enforce-import-order`
 
 Imports go in three groups separated by a blank line, each sorted
