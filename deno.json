@@ -1,6 +1,6 @@
 {
   "name": "@cunarist/deno-import-check",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "exports": {
     ".": "./src/mod.ts",
     "./lint": "./src/lint.ts"
