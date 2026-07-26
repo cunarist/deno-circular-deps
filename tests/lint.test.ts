@@ -358,6 +358,14 @@ Deno.test("no-duplicate-import-source reports every repeated source", () => {
   assertStringIncludes(found[0].hint ?? "", "Combine imports");
 });
 
+Deno.test("no-duplicate-import-source keeps a type-only and a bare import", () => {
+  const source = `import type { Utils } from "#utils";\n` +
+    `import "#utils";\n`;
+  const found = lint("src/mod.ts", source, "no-duplicate-import-source");
+
+  assertEquals(found.length, 0);
+});
+
 Deno.test("no-duplicate-import-source compares exact static sources", () => {
   const source = `import { a } from "#utils";\n` +
     `import { b } from "#components";\n` +

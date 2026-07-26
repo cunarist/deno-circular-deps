@@ -598,28 +598,56 @@ function memberName(specifier: Deno.lint.ImportSpecifier): string {
  *
  * Bans separate static import declarations with the same module specifier.
  * Re-exports and dynamic imports are different operations and are left alone.
+ *
+ * A type-only import beside a bare one is the exception. The type-only
+ * declaration disappears from the emitted module, so folding the bare import
+ * into it would drop the side effect that registers a custom element or
+ * installs a polyfill. Those two say different things and both have to stay.
  */
 export const noDuplicateImportSource: Deno.lint.Rule = {
   create(ctx) {
-    const seen = new Set<string>();
+    const groups = new Map<string, Deno.lint.ImportDeclaration[]>();
 
     return {
       ImportDeclaration(node) {
         const specifier = node.source.value as string;
-        if (!seen.has(specifier)) {
-          seen.add(specifier);
-          return;
+        const group = groups.get(specifier) ?? [];
+        group.push(node);
+        groups.set(specifier, group);
+      },
+      "Program:exit"() {
+        for (const [specifier, group] of groups) {
+          for (const node of mergeableImports(group)) {
+            ctx.report({
+              node: node.source,
+              message: `Import source "${specifier}" is duplicated.`,
+              hint:
+                "Combine imports from the same source into one declaration.",
+            });
+          }
         }
-
-        ctx.report({
-          node: node.source,
-          message: `Import source "${specifier}" is duplicated.`,
-          hint: "Combine imports from the same source into one declaration.",
-        });
       },
     };
   },
 };
+
+/**
+ * The declarations in a same-source group that another one in the group can
+ * absorb. A value import absorbs anything, so the first one keeps its place
+ * and the rest are reported. With no value import, the bare imports collapse
+ * into one and the type-only imports into another, and those two survive.
+ */
+function mergeableImports(
+  group: Deno.lint.ImportDeclaration[],
+): Deno.lint.ImportDeclaration[] {
+  const typeOnly = group.filter((node) => node.importKind === "type");
+  const runtime = group.filter((node) => node.importKind !== "type");
+  const values = runtime.filter((node) => node.specifiers.length > 0);
+  if (values.length > 0) {
+    return group.filter((node) => node !== values[0]);
+  }
+  return [...runtime.slice(1), ...typeOnly.slice(1)];
+}
 
 /**
  * The `enforce-import-order` rule.
